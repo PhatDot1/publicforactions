@@ -136,8 +136,6 @@ def main():
     records = get_airtable_records(airtable_api_key, base_id, source_table_name)
     print(f"Fetched {len(records)} records from Airtable.")
 
-    filtered_records = [record for record in records if 'N' <= record['id'][-1] <= 'Z']
-    print(f"Filtered to {len(filtered_records)} records based on ID condition.")
 
     for record in records:
         fields = record.get('fields', {})
