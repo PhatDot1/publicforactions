@@ -77,7 +77,7 @@ class GitHubApiHandler:
         return None
 
 def get_airtable_records(api_key, base_id, table_name):
-    url = f'https://api.airtable.com/v0/{base_id}/{table_name}?filterByFormula=AND(NOT({{github}} = ""), {{Status}} = "Run")'
+    url = f'https://api.airtable.com/v0/{base_id}/{table_name}?filterByFormula=AND(NOT({{GitHub}} = ""), {{Status}} = "Run")'
     headers = {
         'Authorization': f'Bearer {api_key}',
     }
@@ -103,12 +103,29 @@ def update_airtable_record(api_key, base_id, table_name, record_id, fields):
     print(f"Successfully updated record {record_id}")
     return True
 
+def create_airtable_records(api_key, base_id, table_name, records):
+    url = f'https://api.airtable.com/v0/{base_id}/{table_name}'
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+    data = {
+        'records': records
+    }
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code != 200:
+        print(f"Error creating records: {response.status_code}")
+        return False
+    print(f"Successfully created records in bulk.")
+    return True
+
 def main():
     import os
 
     airtable_api_key = os.environ['AIRTABLE_API_KEY']
-    base_id = 'appV0mGyH1KFYdPoa'
-    table_name = 'tblfCe2AqKE8HU2tt'
+    base_id = 'appKI3FL67UBkEnGP'
+    source_table_name = 'tbloH1PF4n2nxUtja'
+    target_table_name = 'tblXFCGdFJMObMewK'
 
     with open('github_api_keys.txt', 'r') as f:
         api_keys = f.read().split(',')
@@ -116,29 +133,42 @@ def main():
     github_api_handler = GitHubApiHandler(api_keys)
 
     print("Fetching records from Airtable...")
-    records = get_airtable_records(airtable_api_key, base_id, table_name)
+    records = get_airtable_records(airtable_api_key, base_id, source_table_name)
     print(f"Fetched {len(records)} records from Airtable.")
 
     for record in records:
         fields = record.get('fields', {})
-        github_url = fields.get('github', '') or fields.get('Githubb', '')
+        github_url = fields.get('GitHub', '')
         status = fields.get('Status', '')
 
         print(f"Record ID: {record['id']}, GitHub URL: {github_url}, Status: {status}")
 
         if github_url and status == 'Run':
             print(f"Setting record {record['id']} to 'Running'")
-            update_airtable_record(airtable_api_key, base_id, table_name, record['id'], {'Status': 'Running'})
+            update_airtable_record(airtable_api_key, base_id, source_table_name, record['id'], {'Status': 'Running'})
             
             print(f"Processing record: {record['id']} with GitHub URL: {github_url}")
             try:
                 email = github_api_handler.get_user_info_from_github_api(github_url)
                 update_fields = {
-                    'Email': email if email else '',
-                    'Status': 'Dun'
+                    'Scouted Email': email if email else '',
+                    'Status': 'Done'
                 }
-                print(f"Updating record {record['id']} with email: {update_fields['Email']}")
-                update_airtable_record(airtable_api_key, base_id, table_name, record['id'], update_fields)
+                print(f"Updating record {record['id']} with email: {update_fields['Scouted Email']}")
+                update_airtable_record(airtable_api_key, base_id, source_table_name, record['id'], update_fields)
+
+                if email:
+                    new_record = {
+                        'fields': {
+                            'Name': fields.get('Name', ''),
+                            'Github': github_url,
+                            'Scouted Email': email,
+                            'Repo to link': fields.get('Repo to Link', ''),
+                            'Check External Hacker Github': 'Update (Github Repo)'
+                        }
+                    }
+                    print(f"Creating new record in target table with email: {email}")
+                    create_airtable_records(airtable_api_key, base_id, target_table_name, [new_record])
             except Exception as e:
                 print(f"An error occurred while processing {github_url}: {e}")
 
